@@ -77,6 +77,48 @@ class Fixed_Size_Heap:
                         break
         return [-1, -1]
 
+    def _check_record_integrity(self, record):
+        record_fields = record.strip().split(',')
+        record_field_sizes = [len(field) for field in record_fields]
+        record_field_types = infer_types_from_record(record, len(record_fields))
+        if len(record_fields)-1 != len(self.field_names):
+            return -1
+        for i in range(len(self.field_names)):
+            if record_field_sizes[i] > self.field_sizes[i]:
+                return -1
+            if record_field_types[i] != self.field_types[i]:
+                return -1
+        return 0
+
+    def _insert(self, record):
+        if self.deleted_records != []:
+            block_id, record_id = self.deleted_records[0]
+            offset = self.record_size * record_id
+            head = self.blocks[block_id][:offset]
+            tail = self.blocks[block_id][offset + self.record_size:]
+            self.blocks[block_id] = head + record + tail
+        elif len(self.blocks[-1]) + self.record_size < self.block_size:
+            self.blocks[-1] += record
+        else:
+            self.blocks.append(record)
+
+    def insert_single_record(self, record):
+        record_integrity = self._check_record_integrity(record)
+        if record_integrity == -1:
+            raise Exception('InsertError: Invalid Record.')
+        formatted_record = self._format_record(record[:-1])
+        self._insert(formatted_record)
+
+    def insert_multiple_records(self, records):
+        records_integrity = []
+        for record in records:
+            record_integrity = self._check_record_integrity(record)
+            if record_integrity == -1:
+                raise Exception('InsertError: Invalid Record.')
+        for record in records:
+            formatted_record = self._format_record(record[:-1])
+            self._insert(formatted_record)
+
     def _select(self, select_container, block_id, record_id):
         offset = self.record_size * record_id
         record = self.blocks[block_id][offset:offset + self.record_size]
