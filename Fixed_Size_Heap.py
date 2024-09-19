@@ -75,7 +75,17 @@ class Fixed_Size_Heap:
                     success = True
                     if field_id == 0:
                         break
-        return [-1, -1]
+        if not success:
+            yield [-1, -1]
+
+    def _check_unique_primary_key_constraint(self, record):
+        record_fields = record.strip().split(',')
+        record_primary_key = record_fields[0]
+        search_result = list(self._search(field_id=0, value=record_primary_key))[0]
+        i, j = search_result[0], search_result[1]
+        if i != -1 and j != -1:
+            return -1
+        return 0
 
     def _check_record_integrity(self, record):
         record_fields = record.strip().split(',')
@@ -97,6 +107,7 @@ class Fixed_Size_Heap:
             head = self.blocks[block_id][:offset]
             tail = self.blocks[block_id][offset + self.record_size:]
             self.blocks[block_id] = head + record + tail
+            self.deleted_records.pop(0)
         elif len(self.blocks[-1]) + self.record_size < self.block_size:
             self.blocks[-1] += record
         else:
@@ -104,8 +115,11 @@ class Fixed_Size_Heap:
 
     def insert_single_record(self, record):
         record_integrity = self._check_record_integrity(record)
+        unique_primary_key_constraint = self._check_unique_primary_key_constraint(record=record)
         if record_integrity == -1:
             raise Exception('InsertError: Invalid Record.')
+        if unique_primary_key_constraint == -1:
+            raise Exception('InsertError: Duplicated Primary Key.')
         formatted_record = self._format_record(record[:-1])
         self._insert(formatted_record)
 
@@ -113,8 +127,11 @@ class Fixed_Size_Heap:
         records_integrity = []
         for record in records:
             record_integrity = self._check_record_integrity(record)
+            unique_primary_key_constraint = self._check_unique_primary_key_constraint(record=record)
             if record_integrity == -1:
                 raise Exception('InsertError: Invalid Record.')
+            if unique_primary_key_constraint == -1:
+                raise Exception('InsertError: Duplicated Primary Key.')
         for record in records:
             formatted_record = self._format_record(record[:-1])
             self._insert(formatted_record)
