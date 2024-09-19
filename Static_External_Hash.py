@@ -72,11 +72,16 @@ class Static_External_Hash:
 
     def _read_file(self, filename):
         with open(filename, 'r') as file:
+            # Checking primary key constraint
+            file.readline()
+            self._read_file_check_primary_key_constraint(records=file)
+        with open(filename, 'r') as file:
             # Creating buckets (Hash Table)
             file_length = len(file.readlines())-1
             hash_table_size = self._compute_hash_table_size(file_length=file_length)
             hash_function = lambda key : key % hash_table_size
             self.buckets = Hash_Table(size=hash_table_size, hash_function=hash_function)
+        with open(filename, 'r') as file:
             # Filling buckets
             self._set_field_names(file.readline())
             self._read_file_check_primary_key_constraint(records=file)
