@@ -249,16 +249,10 @@ class Static_External_Hash:
         tar_filepath = txt_filepath[:-3] + 'tar.gz'
         with tarfile.open(tar_filepath, "w:gz") as tar:
             tar.add(txt_filepath, arcname=txt_filepath.split('/')[-1])
-
-        # with tarfile.open(tar_filepath, "w") as tar:
-        #     tar.add(txt_filepath, arcname=txt_filepath)
     
     def _decompress_txt_file(self, tar_filepath, output_dir='./dataset/'):
         with tarfile.open(tar_filepath, "r:gz") as tar:
             tar.extractall(path=output_dir)
-
-        # with tarfile.open(tar_filepath, "r") as tar:
-        #     tar.extractall(path=output_dir)
 
     def _delete_txt_file(self, txt_filepath):
         if os.path.exists(txt_filepath):
@@ -583,6 +577,27 @@ class Static_External_Hash:
             raise Exception('SelectionError: Requested Records nonexistent.')
         return select_container
     
+    def select_by_single_field_value(self, txt_filepath, field, value):
+        # Checks if field exists
+        if field not in self.field_names:
+            raise Exception('SelectionError: Field nonexistent.')
+        # If field exists, search for record
+        file = self._read_txt_file(txt_filepath=txt_filepath)
+        field_id = self.field_names.index(field)
+        select_container = []
+        for (i, j) in self._search(field_id=field_id, value=value, file=file):
+            if i == -1 and j == -1:
+                file.close()
+                # Deletes txt file
+                self._delete_txt_file(txt_filepath=txt_filepath)
+                raise Exception('SelectionError: Field Value nonexistent.')
+            else:
+                self._select(select_container=select_container, block_id=i, record_id=j, file=file)
+        file.close()
+        # Deletes txt file
+        self._delete_txt_file(txt_filepath=txt_filepath)
+        return select_container
+
     def _delete_record(self, bucket_id, record_id, file):
         # Read bucket
         offset = self._header_length(file)
