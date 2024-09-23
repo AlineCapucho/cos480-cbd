@@ -130,7 +130,7 @@ class Fixed_Size_Heap:
                     block += additional_padding + '\n'
                     txt_file.write(block)
             except:
-                raise Exception(f"WriteError: Could Write Record: {record}")
+                raise Exception(f"WriteError: Could Not Write Record: {record}")
 
     def _write_from_csv_to_txt(self, csv_file, csv_filepath):
         # Create txt file
