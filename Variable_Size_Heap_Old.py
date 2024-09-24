@@ -177,6 +177,15 @@ class Variable_Size_Heap:
         self.creation_date = self._read_line(file).strip()
         self.alteration_date = self._read_line(file).strip()
 
+    def _read_txt_blocks(self, file):
+        header_length = self._header_length(file=file)
+        self.blocks = []
+        for i in range(0, self.number_of_blocks):
+            offset = header_length + self.block_size * i + i
+            file.seek(offset, 0)
+            block = file.read(self.block_size)
+            self.blocks.append(block)
+
     def _read_txt_file(self, txt_filepath):
         tar_filepath = txt_filepath[:-3] + 'tar.gz'
         self._decompress_txt_file(tar_filepath=tar_filepath)
