@@ -153,6 +153,7 @@ class Variable_Size_Heap:
             offset = header_length + self.block_size * len(self.blocks) + len(self.blocks)
             file.seek(offset, 0)
             block = file.read(self.block_size)
+        self.number_of_blocks = len(self.blocks)
 
     def _read_txt_file(self, txt_filepath):
         file = open(txt_filepath, 'r+')
@@ -183,6 +184,7 @@ class Variable_Size_Heap:
                 break
             # Gets block[i]
             block = self.blocks[i]
+            self.accessed_blocks += 1
             # Gets records from block[i]
             records = self._get_records_from_block(block=block)
             # Checks specified field from each record
@@ -257,6 +259,7 @@ class Variable_Size_Heap:
         exists_block = len(self.blocks) >= 1
         if exists_block:
             block = self.blocks[-1]
+            self.accessed_blocks += 1
 
         # Check if there is space available in the last block
         if block.count("#") >= len(record):
@@ -277,8 +280,10 @@ class Variable_Size_Heap:
             # Writes new block to end the the file
             self.blocks.append(block)
             self.number_of_records += 1
+        self.number_of_blocks = len(self.blocks)
 
     def insert_single_record(self, txt_filepath, record):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         txt_file.close()
         # Check if the record respects the database integrity restriction
@@ -291,6 +296,7 @@ class Variable_Size_Heap:
         self._write_txt_file(txt_filepath=txt_filepath)
 
     def insert_multiple_records(self, txt_filepath, records):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         txt_file.close()
         # Check if the record respects the database integrity restriction
@@ -307,6 +313,7 @@ class Variable_Size_Heap:
     def _select(self, select_container, block_id, record_id):
         # Reads specified block
         block = self.blocks[block_id]
+        self.accessed_blocks += 1
         # Gets records from block
         records = self._get_records_from_block(block=block)
         # Gets specified record
@@ -315,6 +322,7 @@ class Variable_Size_Heap:
         select_container.append(record)
 
     def select_by_single_primary_key(self, txt_filepath, key):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         select_container = []
         for (i, j) in self._search(field_id=0, value=key):
@@ -327,6 +335,7 @@ class Variable_Size_Heap:
         return select_container
 
     def select_by_multiple_primary_key(self, txt_filepath, keys):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         select_container = []
         exception_counter = 0
@@ -342,6 +351,7 @@ class Variable_Size_Heap:
         return select_container
     
     def select_by_field_interval(self, txt_filepath, field, start, end):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         field_id = self.field_names.index(field)
         field_type = self.field_types[field_id]
@@ -367,6 +377,7 @@ class Variable_Size_Heap:
         return select_container
     
     def select_by_single_field_value(self, txt_filepath, field, value):
+        self.accessed_blocks = 0
         # Checks if field exists
         if field not in self.field_names:
             raise Exception('SelectionError: Field nonexistent.')
@@ -416,6 +427,7 @@ class Variable_Size_Heap:
         records = []
         for i in range(0, len(self.blocks)):
             block = self.blocks[i]
+            self.accessed_blocks += 1
             blocks_records = self._get_records_from_block(block=block)
             for blocks_record in blocks_records:
                 if blocks_record.strip("#") != "":
@@ -444,6 +456,7 @@ class Variable_Size_Heap:
     def _delete_record(self, block_id, record_id):
         # Gets block
         block = self.blocks[block_id]
+        self.accessed_blocks += 1
         # Deletes record from block
         block_records = self._get_records_from_block(block=block)
         head = ""
@@ -475,6 +488,7 @@ class Variable_Size_Heap:
         # self.number_of_deleted_records += 1
 
     def delete_record_by_primary_key(self, txt_filepath, key):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         # Searchs for position of record to be deleted
         for (i, j) in self._search(field_id=0, value=key):
@@ -495,6 +509,7 @@ class Variable_Size_Heap:
                     self._write_txt_file(txt_filepath=txt_filepath)
     
     def delete_record_by_criterion(self, txt_filepath, field, value):
+        self.accessed_blocks = 0
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
         field_id = self.field_names.index(field)
         # Searchs for positions of records to be deleted
