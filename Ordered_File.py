@@ -11,6 +11,7 @@ from Util import infer_types_from_record, check_interval, generate_range
 class Ordered_File:
     def __init__(self, block_size):
         self.block_size = block_size
+        self.accessed_blocks = 0
 
     def _set_field_names(self, fields_names):
         self.field_names = fields_names.strip().split(',')
@@ -283,6 +284,7 @@ class Ordered_File:
         success = False
         # Search for record in blocks from txt file
         for i in range(0, len(self.blocks)):
+            self.accessed_blocks += 1
             # If found the record and we are doing a select by primary key, end search
             if success and field_id == 0:
                 break
@@ -300,6 +302,7 @@ class Ordered_File:
                     success = True
         # Search for record in blocks from ext file
         for i in range(0, len(self.ext_blocks)):
+            self.accessed_blocks += 1
             # If found the record and we are doing a select by primary key, end search
             if success and field_id == 0:
                 break
@@ -388,6 +391,7 @@ class Ordered_File:
         exists_block = len(self.ext_blocks) >= 1
         if exists_block:
             block = self.ext_blocks[-1]
+        self.accessed_blocks += 1
 
         # Check if there is space available in the last ext block
         number_of_records_in_block = len(block.strip('#')) // self.record_size
@@ -400,6 +404,7 @@ class Ordered_File:
             self.number_of_records += 1
         else:
             # If there is not, then create a new ext block
+            self.accessed_blocks += 1
             padding = "#" * (self.block_size - self.record_size)
             block = record + padding
             # Writes new ext block to the end of the ext file
@@ -414,6 +419,8 @@ class Ordered_File:
         record_integrity = self._check_record_integrity(record=record)
         if record_integrity == -1:
             txt_file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('InsertError: Invalid Record.')
         # Formats and inserts record
         formatted_record = self._format_record(record[:-1])
@@ -423,6 +430,8 @@ class Ordered_File:
         # Writes ext file
         self._write_ext_file(ext_filepath=ext_filepath)
         txt_file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
 
     def insert_multiple_records(self, txt_filepath, records):
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -432,6 +441,8 @@ class Ordered_File:
             record_integrity = self._check_record_integrity(record=record)
             if record_integrity == -1:
                 txt_file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('InsertError: Invalid Record.')
         # Formats and inserts records
         for record in records:
@@ -442,6 +453,8 @@ class Ordered_File:
         # Writes ext file
         self._write_ext_file(ext_filepath=ext_filepath)
         txt_file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
     
     def _select(self, select_container, block_id, record_id):
         if block_id < len(self.blocks):
@@ -461,10 +474,14 @@ class Ordered_File:
         for (i, j) in self._search(field_id=0, value=key):
             if i == -1 and j == -1:
                 txt_file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('SelectionError: Primary Key nonexistent.')
             else:
                 self._select(select_container=select_container, block_id=i, record_id=j)
         txt_file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         return select_container
 
     def select_by_multiple_primary_key(self, txt_filepath, keys):
@@ -479,6 +496,8 @@ class Ordered_File:
                 else:
                     self._select(select_container=select_container, block_id=i, record_id=j)
         txt_file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         if exception_counter == len(keys):
             raise Exception('SelectionError: Primary Keys nonexistent.')
         return select_container
@@ -491,10 +510,14 @@ class Ordered_File:
         possible_field_interval = check_interval(interval_type=field_type, start=start, end=end)
         if possible_field_interval == -1:
             txt_file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('SelectionError: Field Interval incomputable.')
         value_range = generate_range(range_type=field_type, start=start, end=end)
         if value_range == -1:
             txt_file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('SelectionError: Field Interval incomputable.')
         select_container = []
         exception_counter = 0
@@ -505,6 +528,8 @@ class Ordered_File:
                 else:
                     self._select(select_container=select_container, block_id=i, record_id=j)
         txt_file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         if exception_counter == len(value_range):
             raise Exception('SelectionError: Requested Records nonexistent.')
         return select_container
@@ -521,10 +546,14 @@ class Ordered_File:
         for (i, j) in self._search(field_id=field_id, value=value):
             if i == -1 and j == -1:
                 txt_file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('SelectionError: Field Value nonexistent.')
             else:
                 self._select(select_container=select_container, block_id=i, record_id=j)
         txt_file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         return select_container
 
     def _recreating_txt_file(self, ordered_records, txt_filepath):
@@ -568,12 +597,14 @@ class Ordered_File:
     def _reordering(self, txt_filepath, ext_filepath):
         records = []
         for i in range(0, len(self.blocks)):
+            self.accessed_blocks += 1
             block = self.blocks[i]
             for j in range(0, self.blocking_factor):
                 record = block[self.record_size * j:self.record_size * (j + 1)]
                 if record.strip("#") != "":
                     records.append(record)
         for i in range(0, len(self.ext_blocks)):
+            self.accessed_blocks += 1
             block = self.ext_blocks[i]
             for j in range(0, self.blocking_factor):
                 record = block[self.record_size * j:self.record_size * (j + 1)]
@@ -607,6 +638,7 @@ class Ordered_File:
             block = head + body + tail
             self.ext_blocks[ext_block_id] = block
             self.number_of_deleted_records += 1
+        self.accessed_blocks += 1
 
     def delete_record_by_primary_key(self, txt_filepath, key):
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -615,6 +647,8 @@ class Ordered_File:
         for (i, j) in self._search(field_id=0, value=key):
             if i == -1 and j == -1:
                 txt_file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('DeleteError: Primary Key nonexistent.')
             else:
                 # Deletes the record
@@ -629,6 +663,8 @@ class Ordered_File:
                 self._write_txt_file(txt_filepath=txt_filepath)
                 # Writes ext file
                 self._write_ext_file(ext_filepath=ext_filepath)
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
     
     def delete_record_by_criterion(self, txt_filepath, field, value):
         txt_file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -638,6 +674,8 @@ class Ordered_File:
         for (i, j) in self._search(field_id=field_id, value=value):
             if i == -1 and j == -1:
                 txt_file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('DeleteError: Field Value nonexistent.')
             else:
                 # Deletes the record
@@ -652,3 +690,5 @@ class Ordered_File:
         self._write_txt_file(txt_filepath=txt_filepath)
         # Writes ext file
         self._write_ext_file(ext_filepath=ext_filepath)
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0

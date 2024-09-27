@@ -13,6 +13,7 @@ from Util import infer_types_from_record, check_interval, generate_range
 class Static_External_Hash:
     def __init__(self, block_size):
         self.block_size = block_size
+        self.accessed_blocks = 0
 
     def _set_field_names(self, fields_names):
         self.field_names = fields_names.strip().split(',')
@@ -326,6 +327,7 @@ class Static_External_Hash:
             if success == True:
                 break
             record = bucket[i * self.record_size: (i + 1) * self.record_size]
+            self.accessed_blocks += 1
             record_fields = record.strip().split(',')
             record_primary_key = record_fields[0].strip()
             if key == record_primary_key:
@@ -335,6 +337,7 @@ class Static_External_Hash:
         # If record is not in bucket[hash(key)], checks if record is in some overflow bucket
         if not success:
             for i in range(0, self.number_of_overflow_buckets):
+                self.accessed_blocks += 1
                 offset = header_length + self.block_size * (self.number_of_buckets + i) + self.number_of_buckets + i
                 file.seek(offset, 0)
                 overflow_bucket = file.read(self.block_size)
@@ -359,6 +362,7 @@ class Static_External_Hash:
         number_of_blocks = self.number_of_buckets + self.number_of_overflow_buckets
         header_length = self._header_length(file)
         for i in range(0, number_of_blocks):
+            self.accessed_blocks += 1
             offset = header_length + self.block_size * i + i
             file.seek(offset, 0)
             bucket = file.read(self.block_size)
@@ -436,6 +440,7 @@ class Static_External_Hash:
         success = False
         number_of_records_in_bucket = len(bucket.strip('#')) // self.record_size
         if number_of_records_in_bucket < self.blocking_factor:
+            self.accessed_blocks += 1
             # If there is, then write record to bucket
             body = bucket[:self.record_size * number_of_records_in_bucket]
             padding = "#" * (self.block_size - self.record_size * (number_of_records_in_bucket + 1))
@@ -447,6 +452,7 @@ class Static_External_Hash:
         else:
             # If there is not, then search for space available in some overflow bucket
             for i in range(0, self.number_of_overflow_buckets):
+                self.accessed_blocks += 1
                 if success:
                     break
                 offset = header_length + self.block_size * (self.number_of_buckets + i) + self.number_of_buckets + i
@@ -476,6 +482,8 @@ class Static_External_Hash:
             file.close()
             # Deletes txt file
             self._delete_txt_file(txt_filepath=txt_filepath)
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('InsertError: Invalid Record.')
         # Formats and inserts record
         formatted_record = self._format_record(record[:-1])
@@ -485,6 +493,8 @@ class Static_External_Hash:
         # Compresses txt file to gzip file and deletes txt file
         self._compress_delete_txt_file(txt_filepath=txt_filepath)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
 
     def insert_multiple_records(self, txt_filepath, records):
         file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -493,6 +503,8 @@ class Static_External_Hash:
             record_integrity = self._check_record_integrity(record=record, file=file)
             if record_integrity == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 # Deletes txt file
                 self._delete_txt_file(txt_filepath=txt_filepath)
                 raise Exception('InsertError: Invalid Record.')
@@ -505,6 +517,8 @@ class Static_External_Hash:
         # Compresses txt file to gzip file and deletes txt file
         self._compress_delete_txt_file(txt_filepath=txt_filepath)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
 
     def _select(self, select_container, block_id, record_id, file):
         offset = self._header_length(file)
@@ -519,12 +533,16 @@ class Static_External_Hash:
         for (i, j) in self._search(field_id=0, value=key, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 # Deletes txt file
                 self._delete_txt_file(txt_filepath=txt_filepath)
                 raise Exception('SelectionError: Primary Key nonexistent.')
             else:
                 self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         # Deletes txt file
         self._delete_txt_file(txt_filepath=txt_filepath)
         return select_container
@@ -540,6 +558,8 @@ class Static_External_Hash:
                 else:
                     self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         # Deletes txt file
         self._delete_txt_file(txt_filepath=txt_filepath)
         if exception_counter == len(keys):
@@ -553,12 +573,16 @@ class Static_External_Hash:
         possible_field_interval = check_interval(interval_type=field_type, start=start, end=end)
         if possible_field_interval == -1:
             file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             # Deletes txt file
             self._delete_txt_file(txt_filepath=txt_filepath)
             raise Exception('SelectionError: Field Interval incomputable.')
         value_range = generate_range(range_type=field_type, start=start, end=end)
         if value_range == -1:
             file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             # Deletes txt file
             self._delete_txt_file(txt_filepath=txt_filepath)
             raise Exception('SelectionError: Field Interval incomputable.')
@@ -571,6 +595,8 @@ class Static_External_Hash:
                 else:
                     self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         # Deletes txt file
         self._delete_txt_file(txt_filepath=txt_filepath)
         if exception_counter == len(value_range):
@@ -588,12 +614,16 @@ class Static_External_Hash:
         for (i, j) in self._search(field_id=field_id, value=value, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 # Deletes txt file
                 self._delete_txt_file(txt_filepath=txt_filepath)
                 raise Exception('SelectionError: Field Value nonexistent.')
             else:
                 self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         # Deletes txt file
         self._delete_txt_file(txt_filepath=txt_filepath)
         return select_container
@@ -604,6 +634,7 @@ class Static_External_Hash:
         offset += self.block_size * bucket_id + bucket_id
         file.seek(offset, 0)
         bucket = file.read(self.block_size)
+        self.accessed_blocks += 1
         # Brings records closer to begin of bucket
         number_of_records_in_bucket = len(bucket.strip('#')) // self.record_size
         body = ""
@@ -625,6 +656,8 @@ class Static_External_Hash:
         for (i, j) in self._search(field_id=0, value=key, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 # Deletes txt file
                 self._delete_txt_file(txt_filepath=txt_filepath)
                 raise Exception('DeleteError: Primary Key nonexistent.')
@@ -636,6 +669,8 @@ class Static_External_Hash:
                 # Compresses txt file to gzip file and deletes txt file
                 self._compress_delete_txt_file(txt_filepath=txt_filepath)
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
     
     def delete_record_by_criterion(self, txt_filepath, field, value):
         file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -644,6 +679,8 @@ class Static_External_Hash:
         for (i, j) in self._search(field_id=field_id, value=value, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 # Deletes txt file
                 self._delete_txt_file(txt_filepath=txt_filepath)
                 raise Exception('DeleteError: Field Value nonexistent.')
@@ -655,3 +692,5 @@ class Static_External_Hash:
         # Compresses txt file to gzip file and deletes txt file
         self._compress_delete_txt_file(txt_filepath=txt_filepath)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0

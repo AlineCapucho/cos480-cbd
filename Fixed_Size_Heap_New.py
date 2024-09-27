@@ -10,6 +10,7 @@ from Util import infer_types_from_record, check_interval, generate_range
 class Fixed_Size_Heap:
     def __init__(self, block_size):
         self.block_size = block_size
+        self.accessed_blocks = 0
 
     def _set_field_names(self, fields_names):
         self.field_names = fields_names.strip().split(',')
@@ -199,6 +200,7 @@ class Fixed_Size_Heap:
         success = False
         header_length = self._header_length(file)
         for i in range(0, self.number_of_blocks+1):
+            self.accessed_blocks += 1
             # If found the record and we are doing a select by primary key, end search
             if success and field_id == 0:
                 break
@@ -261,6 +263,7 @@ class Fixed_Size_Heap:
         
         # Check if there is a deleted record to reuse space
         if self.deleted_records:
+            self.accessed_blocks += 1
             # Read from the first deleted record
             block_id, record_id = self.deleted_records[0]
             offset = self._header_length(file)
@@ -284,6 +287,7 @@ class Fixed_Size_Heap:
             offset += self.block_size * (self.number_of_blocks - 1) + (self.number_of_blocks - 1)
             file.seek(offset, 0)
             block = file.read(self.block_size)
+            self.accessed_blocks += 1
 
             # Check if there is space available in the last block
             number_of_records_in_block = len(block.strip('#')) // self.record_size
@@ -297,6 +301,7 @@ class Fixed_Size_Heap:
                 self.number_of_records += 1
             else:
                 # If there is not, then create a new block
+                self.accessed_blocks += 1
                 padding = "#" * (self.block_size - self.record_size)
                 block = record + padding + '\n'
                 # Writes new block to the end of the file
@@ -313,6 +318,8 @@ class Fixed_Size_Heap:
         record_integrity = self._check_record_integrity(record=record, file=file)
         if record_integrity == -1:
             file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('InsertError: Invalid Record.')
         # Formats and inserts record
         formatted_record = self._format_record(record[:-1])
@@ -320,6 +327,8 @@ class Fixed_Size_Heap:
         # Updates txt file header
         self._write_txt_header(txt_file=file, txt_filepath=txt_filepath)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
 
     def insert_multiple_records(self, txt_filepath, records):
         file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -328,6 +337,8 @@ class Fixed_Size_Heap:
             record_integrity = self._check_record_integrity(record=record, file=file)
             if record_integrity == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('InsertError: Invalid Record.')
         # Formats and inserts records
         for record in records:
@@ -336,6 +347,8 @@ class Fixed_Size_Heap:
         # Updates txt file header
         self._write_txt_header(txt_file=file, txt_filepath=txt_filepath)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
 
     def _select(self, select_container, block_id, record_id, file):
         offset = self._header_length(file)
@@ -350,10 +363,14 @@ class Fixed_Size_Heap:
         for (i, j) in self._search(field_id=0, value=key, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('SelectionError: Primary Key nonexistent.')
             else:
                 self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         return select_container
 
     def select_by_multiple_primary_key(self, txt_filepath, keys):
@@ -368,7 +385,11 @@ class Fixed_Size_Heap:
                     self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
         if exception_counter == len(keys):
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('SelectionError: Primary Keys nonexistent.')
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         return select_container
     
     def select_by_field_interval(self, txt_filepath, field, start, end):
@@ -378,10 +399,14 @@ class Fixed_Size_Heap:
         possible_field_interval = check_interval(interval_type=field_type, start=start, end=end)
         if possible_field_interval == -1:
             file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('SelectionError: Field Interval incomputable.')
         value_range = generate_range(range_type=field_type, start=start, end=end)
         if value_range == -1:
             file.close()
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('SelectionError: Field Interval incomputable.')
         select_container = []
         exception_counter = 0
@@ -393,7 +418,11 @@ class Fixed_Size_Heap:
                     self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
         if exception_counter == len(value_range):
+            print('Accessed Blocks:', self.accessed_blocks);
+            self.accessed_blocks = 0
             raise Exception('SelectionError: Requested Records nonexistent.')
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         return select_container
     
     def select_by_single_field_value(self, txt_filepath, field, value):
@@ -407,10 +436,14 @@ class Fixed_Size_Heap:
         for (i, j) in self._search(field_id=field_id, value=value, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('SelectionError: Field Value nonexistent.')
             else:
                 self._select(select_container=select_container, block_id=i, record_id=j, file=file)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
         return select_container
 
     def _delete_record(self, block_id, record_id, file):
@@ -419,6 +452,7 @@ class Fixed_Size_Heap:
         offset += self.block_size * block_id + block_id
         file.seek(offset, 0)
         block = file.read(self.block_size)
+        self.accessed_blocks += 1
         # Deletes record from block
         head = block[:self.record_size * record_id]
         body = "#" * self.record_size
@@ -440,6 +474,8 @@ class Fixed_Size_Heap:
         for (i, j) in self._search(field_id=0, value=key, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('DeleteError: Primary Key nonexistent.')
             else:
                 # Deletes the record
@@ -447,6 +483,8 @@ class Fixed_Size_Heap:
                 # Updates txt file header
                 self._write_txt_header(txt_file=file, txt_filepath=txt_filepath)
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
     
     def delete_record_by_criterion(self, txt_filepath, field, value):
         file = self._read_txt_file(txt_filepath=txt_filepath)
@@ -455,6 +493,8 @@ class Fixed_Size_Heap:
         for (i, j) in self._search(field_id=field_id, value=value, file=file):
             if i == -1 and j == -1:
                 file.close()
+                print('Accessed Blocks:', self.accessed_blocks);
+                self.accessed_blocks = 0
                 raise Exception('DeleteError: Field Value nonexistent.')
             else:
                 # Deletes the record
@@ -462,3 +502,5 @@ class Fixed_Size_Heap:
         # Updates txt file header
         self._write_txt_header(txt_file=file, txt_filepath=txt_filepath)
         file.close()
+        print('Accessed Blocks:', self.accessed_blocks);
+        self.accessed_blocks = 0
